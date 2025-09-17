@@ -10,4 +10,4 @@ Fast, safe diff between `.env.example` and `.env` with GitHub-like output.
 > Replace `USER` and `REPO` with your GitHub path.
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/USER/REPO/refs/heads/main/env-diff.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/kiarashH3I/envDiff/refs/heads/main/env-diff.sh)
