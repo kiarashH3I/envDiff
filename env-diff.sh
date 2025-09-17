@@ -4,10 +4,10 @@ set -euo pipefail
 EXAMPLE_FILE="${1:-.env.example}"
 ENV_FILE="${2:-.env}"
 
-SHOW_VALUES="${SHOW_VALUES:-false}"      
-COLOR="${COLOR:-auto}"                   
-STRICT_KEYS="${STRICT_KEYS:-false}"     
-EXIT_ON_DIFF="${EXIT_ON_DIFF:-true}"   
+SHOW_VALUES="${SHOW_VALUES:-false}"
+COLOR="${COLOR:-auto}"
+EXIT_ON_DIFF="${EXIT_ON_DIFF:-true}"
+PLACEHOLDER_PATTERNS="${PLACEHOLDER_PATTERNS:-}"
 
 if [[ ! -r "$EXAMPLE_FILE" ]]; then
   echo "error: cannot read '$EXAMPLE_FILE'" >&2
@@ -27,10 +27,12 @@ case "$COLOR" in
   *)      echo "error: COLOR must be auto|always|never" >&2; exit 1 ;;
 esac
 
-c_red=""; c_green=""; c_yellow=""; c_dim=""; c_reset=""
+c_red=""; c_green=""; c_yellow=""; c_blue=""; c_dim=""; c_reset=""
 if $use_color; then
-  c_red=$'\033[31m'; c_green=$'\033[32m'; c_yellow=$'\033[33m'; c_dim=$'\033[2m'; c_reset=$'\033[0m'
+  c_red=$'\033[31m'; c_green=$'\033[32m'; c_yellow=$'\033[33m'; c_blue=$'\033[34m'; c_dim=$'\033[2m'; c_reset=$'\033[0m'
 fi
+
+trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; s="${s%"${s##*[![:space:]]}"}"; printf '%s' "$s"; }
 
 parse_env() {
   awk '
@@ -43,11 +45,11 @@ parse_env() {
     line=trim(line)
     if (line=="" || line ~ /^#/) next
     sub(/^export[ \t]+/,"",line)
-    # Keep only valid ENV keys (A-Z0-9 and _), stop at first =
     split(line, a, "=")
     key=trim(a[1])
     if (key=="" || key !~ /^[A-Za-z_][A-Za-z0-9_]*$/) next
-    if (index(line,"=")==0) { val="" } else { val=substr(line, index(line,"=")+1) }
+    val=""
+    if (index($0,"=")>0) { val=substr($0, index($0,"=")+1) }
     val=trim(val)
     if ((val ~ /^".*"$/) || (val ~ /^'\''.*'\''$/)) { val=substr(val,2,length(val)-2) }
     print key "\t" val
@@ -58,28 +60,51 @@ declare -A ex env
 while IFS=$'\t' read -r k v; do [[ -n "${k:-}" ]] && ex["$k"]="$v"; done < <(parse_env "$EXAMPLE_FILE")
 while IFS=$'\t' read -r k v; do [[ -n "${k:-}" ]] && env["$k"]="$v"; done < <(parse_env "$ENV_FILE")
 
-mask() {
-  local s="$1"
-  $SHOW_VALUES || { echo "(hidden)"; return; }
-  echo "$s"
+mask() { $SHOW_VALUES && printf '%s\n' "$1" || printf '(hidden)\n'; }
+
+normlower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
+is_placeholder() {
+  local v="$(trim "$1")"
+  [[ -z "$v" ]] && return 0
+  [[ "$v" =~ ^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$ ]] && return 1
+  local vl="$(normlower "$v")"
+  [[ "$vl" =~ ^(your(key|token|secret|password)?(here)?|changeme|replace(me)?|sample|example|dummy|placeholder|to_be_filled|fillme|setme|none|null|nil|n/?a|empty)$ ]] && return 0
+  [[ "$v" =~ ^[Xx]{6,}$ ]] && return 0
+  [[ "$v" =~ ^(.)\1\1\1\1\1+$ ]] && return 0
+  [[ "$v" =~ ^[._\-*•·]{6,}$ ]] && return 0
+  [[ "$v" =~ ^<[^>]+>$ ]] && return 0
+  if [[ -n "$PLACEHOLDER_PATTERNS" ]]; then
+    IFS=',' read -r -a pats <<< "$PLACEHOLDER_PATTERNS"
+    for p in "${pats[@]}"; do
+      [[ -z "$p" ]] && continue
+      if printf '%s' "$v" | grep -Eiq -- "$p"; then return 0; fi
+    done
+  fi
+  return 1
 }
 
 missing=()
 extra=()
 changed=()
+placeholders=()
 
 for k in "${!ex[@]}"; do
   if [[ -z "${env[$k]+_}" ]]; then
     missing+=("$k")
   else
-    if [[ "$STRICT_KEYS" == "true" ]] && [[ "${ex[$k]}" != "${env[$k]}" ]]; then
+    if [[ "${ex[$k]}" != "${env[$k]}" ]]; then
       changed+=("$k")
     fi
   fi
 done
+
 for k in "${!env[@]}"; do
   if [[ -z "${ex[$k]+_}" ]]; then
     extra+=("$k")
+  fi
+  if is_placeholder "${env[$k]}"; then
+    placeholders+=("$k")
   fi
 done
 
@@ -87,6 +112,7 @@ diff_found=false
 ((${#missing[@]})) && diff_found=true
 ((${#extra[@]})) && diff_found=true
 ((${#changed[@]})) && diff_found=true
+((${#placeholders[@]})) && diff_found=true
 
 if ! $diff_found; then
   echo "${c_green}✓ No differences between ${EXAMPLE_FILE} and ${ENV_FILE}.${c_reset}"
@@ -112,11 +138,20 @@ fi
 if ((${#changed[@]})); then
   echo "${c_yellow}~ Present in both, values differ:${c_reset}"
   for k in "${changed[@]}"; do
-    echo "  ${c_yellow}~ ${k}${c_reset}"
     if $SHOW_VALUES; then
+      echo "  ${c_yellow}~ ${k}${c_reset}"
       echo "    ${c_dim}example:${c_reset} ${ex[$k]}"
       echo "    ${c_dim}env:    ${c_reset} ${env[$k]}"
+    else
+      echo "  ${c_yellow}~ ${k}=${c_dim}(hidden) → (hidden)${c_reset}"
     fi
+  done
+fi
+
+if ((${#placeholders[@]})); then
+  echo "${c_blue}! Placeholders or empty in ${ENV_FILE}:${c_reset}"
+  for k in "${placeholders[@]}"; do
+    echo "  ${c_blue}! ${k}=${c_dim}$(mask "${env[$k]}")${c_reset}"
   done
 fi
 
