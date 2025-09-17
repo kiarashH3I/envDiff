@@ -1,13 +1,18 @@
 # env-diff
 
-Fast, safe diff between `.env.example` and `.env` with GitHub-like output.
-- Values are **hidden by default**.
-- Color output when run in a TTY.
-- CI-friendly exit codes.
+Compare `.env.example` and `.env` with:
+- Missing/extra keys
+- Changed values
+- Placeholder or empty values (like `yourkeyhere`, `XXXXXXXX`, `<YOUR_KEY>`)
 
-## One-liner
+Values are shown by default. Color output when TTY. CI-friendly exit codes.
 
-> Replace `USER` and `REPO` with your GitHub path.
+---
+
+## Quick Start
+
+Run directly from GitHub:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/kiarashH3I/envDiff/refs/heads/main/env-diff.sh)
+curl -Ls https://raw.githubusercontent.com/kiarashH3I/envDiff/refs/heads/main/env-diff.sh -o /tmp/env-diff.sh
+bash /tmp/env-diff.sh
