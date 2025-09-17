@@ -4,7 +4,7 @@ set -euo pipefail
 EXAMPLE_FILE="${1:-.env.example}"
 ENV_FILE="${2:-.env}"
 
-SHOW_VALUES="${SHOW_VALUES:-false}"
+SHOW_VALUES="${SHOW_VALUES:-true}"
 COLOR="${COLOR:-auto}"
 EXIT_ON_DIFF="${EXIT_ON_DIFF:-true}"
 PLACEHOLDER_PATTERNS="${PLACEHOLDER_PATTERNS:-}"
