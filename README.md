@@ -12,7 +12,10 @@ Values are shown by default. Color output when TTY. CI-friendly exit codes.
 ## Quick Start
 
 Run directly from GitHub:
-
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/kiarashH3I/envDiff/refs/heads/main/env-diff.sh)
+```
+or like localy
 ```bash
 curl -Ls https://raw.githubusercontent.com/kiarashH3I/envDiff/refs/heads/main/env-diff.sh -o /tmp/env-diff.sh
 bash /tmp/env-diff.sh
