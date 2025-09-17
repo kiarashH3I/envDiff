@@ -71,13 +71,30 @@ is_placeholder() {
   local v; v="$(trim "$1")"
   [ -z "$v" ] && return 0
   if is_var_ref "$v"; then return 1; fi
+
   case "$(lower "$v")" in
     yourkeyhere|yourtokenhere|yoursecrethere|yourpasswordhere|yourkey|yourtoken|yoursecret|yourpassword|changeme|replaceme|sample|example|dummy|placeholder|to_be_filled|fillme|setme|none|null|nil|n/a|n-a|empty) return 0 ;;
   esac
+
+  # Plain long X or x sequences
   printf '%s' "$v" | grep -Eiq '^[Xx]{6,}$' && return 0
+
+  # Repeated same character (like -------- or ******)
   printf '%s' "$v" | grep -Eq '^(.)\1{5,}$' && return 0
+
+  # Placeholder-style punctuation only
   printf '%s' "$v" | grep -Eq '^[._\-\*•·]{6,}$' && return 0
+
+  # <YOUR_KEY> style
   printf '%s' "$v" | grep -Eq '^<[^>]+>$' && return 0
+
+  # NEW: Patterns with X/x groups and dashes
+  # Matches things like XXXX-XXXX, XX-XX, xxx-xx-xxx
+  printf '%s' "$v" | grep -Eiq '^([Xx]{2,}(-[Xx]{2,})+)$' && return 0
+
+  # Extra: alphanumeric placeholders like abcd-efgh
+  printf '%s' "$v" | grep -Eiq '^([A-Za-z]{2,}(-[A-Za-z]{2,})+)$' && return 0
+
   if [ -n "$PLACEHOLDER_PATTERNS" ]; then
     IFS=',' read -r -a pats <<< "$PLACEHOLDER_PATTERNS"
     for p in "${pats[@]}"; do
@@ -85,6 +102,7 @@ is_placeholder() {
       if printf '%s' "$v" | grep -Eiq -- "$p"; then return 0; fi
     done
   fi
+
   return 1
 }
 
