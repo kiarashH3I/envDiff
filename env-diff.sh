@@ -33,6 +33,7 @@ if $use_color; then
 fi
 
 trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; s="${s%"${s##*[![:space:]]}"}"; printf '%s' "$s"; }
+normlower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
 parse_env() {
   awk '
@@ -62,18 +63,17 @@ while IFS=$'\t' read -r k v; do [[ -n "${k:-}" ]] && env["$k"]="$v"; done < <(pa
 
 mask() { $SHOW_VALUES && printf '%s\n' "$1" || printf '(hidden)\n'; }
 
-normlower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
-
 is_placeholder() {
   local v="$(trim "$1")"
   [[ -z "$v" ]] && return 0
   [[ "$v" =~ ^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$ ]] && return 1
-  local vl="$(normlower "$v")"
-  [[ "$vl" =~ ^(your(key|token|secret|password)?(here)?|changeme|replace(me)?|sample|example|dummy|placeholder|to_be_filled|fillme|setme|none|null|nil|n/?a|empty)$ ]] && return 0
-  [[ "$v" =~ ^[Xx]{6,}$ ]] && return 0
-  [[ "$v" =~ ^(.)\1\1\1\1\1+$ ]] && return 0
-  [[ "$v" =~ ^[._\-*•·]{6,}$ ]] && return 0
-  [[ "$v" =~ ^<[^>]+>$ ]] && return 0
+  case "$(normlower "$v")" in
+    yourkeyhere|yourtokenhere|yoursecrethere|yourpasswordhere|yourkey|yourtoken|yoursecret|yourpassword|changeme|replaceme|sample|example|dummy|placeholder|to_be_filled|fillme|setme|none|null|nil|n/a|n\-a|empty) return 0 ;;
+  esac
+  printf '%s' "$v" | grep -Eiq '^[Xx]{6,}$' && return 0
+  printf '%s' "$v" | grep -Eq '^(.)\1{5,}$' && return 0
+  printf '%s' "$v" | grep -Eq '^[._\-\*•·]{6,}$' && return 0
+  printf '%s' "$v" | grep -Eq '^<[^>]+>$' && return 0
   if [[ -n "$PLACEHOLDER_PATTERNS" ]]; then
     IFS=',' read -r -a pats <<< "$PLACEHOLDER_PATTERNS"
     for p in "${pats[@]}"; do
